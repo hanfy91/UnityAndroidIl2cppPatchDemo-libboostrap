@@ -30,11 +30,11 @@ struct FileExtraData
 // file fd is slow theoratically, but it is ok on a flash disk and I don't notice it.
 // no other choice, as the mutex is buggy in fclose with timing irq.
 
-static int init_file_mapping_data()
+static int delete_old_file_mapping_data()
 {
 	char fds_dir[512] = {0};
 	snprintf(fds_dir, sizeof(fds_dir), "%s/rt_fd_mappings", g_use_data_path);
-	MY_INFO("init_file_mapping_data %s with apk_path:%s", TARGET_ARCH_ABI, fds_dir);	
+	MY_INFO("delete_old_file_mapping_data %s with apk_path:%s", TARGET_ARCH_ABI, fds_dir);
 	
 	//create dir if not exist
 	DIR* dir = opendir(fds_dir);
