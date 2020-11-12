@@ -42,6 +42,24 @@ JNIEXPORT void JNICALL Java_io_github_noodle1983_Boostrap_init
 	bootstrap();
 }
 
+__attribute__ ((visibility ("default")))
+JNIEXPORT void JNICALL Java_io_github_noodle1983_Boostrap_setpath
+  (JNIEnv * jenv, jclass cls, jstring dataPath, jstring path, jstring apkPath)
+{
+	const char* target_file_path = jenv->GetStringUTFChars(path, NULL); 
+	const char* apk_path = jenv->GetStringUTFChars(apkPath, NULL);
+	const char* data_file_path = jenv->GetStringUTFChars(dataPath, NULL); 
+	g_data_file_path = dupstr(data_file_path); // never delete, ok with only one
+
+	use_data_dir(target_file_path, apk_path);
+
+	MY_INFO("set_path jieluo:%s", target_file_path);
+
+	jenv->ReleaseStringUTFChars(dataPath, data_file_path);
+	jenv->ReleaseStringUTFChars(path, target_file_path);
+	jenv->ReleaseStringUTFChars(apkPath, apk_path);
+}
+
 static std::string get_bundle_id()
 {
 	pid_t pid = getpid();

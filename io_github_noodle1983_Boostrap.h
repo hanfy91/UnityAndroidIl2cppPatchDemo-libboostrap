@@ -15,6 +15,9 @@ extern "C" {
 JNIEXPORT void JNICALL Java_io_github_noodle1983_Boostrap_init
   (JNIEnv *, jclass, jstring);
 
+JNIEXPORT void JNICALL Java_io_github_noodle1983_Boostrap_setpath
+  (JNIEnv *, jclass, jstring, jstring, jstring);
+
 #ifdef __cplusplus
 }
 #endif
