@@ -29,6 +29,10 @@ const char* SPLITER = ";";
 const char* g_data_file_path = NULL;
 const char* g_apk_file_path = NULL;
 const char* g_bundle_id = NULL;
+
+static bool g_has_il2cpp_patch = false;
+static bool g_has_assets_patch = false;
+
 static void bootstrap();
 std::string get_apk_path(const std::string& bundle_id);
 
@@ -277,6 +281,30 @@ static bool pre_process_all_so_lib(const std::string& bundle_id)
 	return true;
 }
 
+bool has_any_assets_patch(const char* _patch_dir)
+{
+    char apk_patch_path[512] = {0};
+    snprintf( apk_patch_path, sizeof(apk_patch_path), "%s/assets_bin_Data", _patch_dir );
+
+    DIR* dir = opendir(apk_patch_path);
+    if (dir == NULL){
+		MY_INFO("opendir failed:%d[%s]", errno, apk_patch_path);
+		return false;
+	}
+
+	bool has_any = false;
+    struct dirent *ent = NULL;
+    while((ent = readdir(dir)) != NULL) {
+        if(ent->d_type & DT_REG) {
+			has_any = true;
+			break;
+        }
+    }
+    closedir(dir);
+
+    return has_any;
+}
+
 static dev_t g_apk_device_id = -1;
 static ino_t g_apk_ino = -1;
 static bool extract_patch_info(std::string& default_path, std::string& patch_path)
@@ -285,7 +313,7 @@ static bool extract_patch_info(std::string& default_path, std::string& patch_pat
 	snprintf(default_il2cpp_path, sizeof(default_il2cpp_path), "%s/../lib/libil2cpp.so",  g_data_file_path);
 	default_path = std::string(default_il2cpp_path);
 	patch_path.clear();
-	
+
 	char patch_info_path[256] = {0};
 	snprintf(patch_info_path, sizeof(patch_info_path), "%s/user.db",  g_data_file_path);
 	
@@ -365,10 +393,16 @@ static bool extract_patch_info(std::string& default_path, std::string& patch_pat
 	if (fi == NULL) 
 	{
 		MY_ERROR("can't libil2cpp:%s", il2cpp_path.c_str());
-		return false;		   
+		g_has_il2cpp_patch = false;
 	}
-	fclose (fi);
-	
+	else
+	{
+		g_has_il2cpp_patch = true;
+	    fclose (fi);
+	}
+
+	g_has_assets_patch = has_any_assets_patch(data_path);
+
 	if (g_use_data_path != NULL){delete[] g_use_data_path;}
 	g_use_data_path = dupstr(data_path);
 	if (g_apk_file_path != NULL){delete[] g_apk_file_path;}
@@ -376,7 +410,7 @@ static bool extract_patch_info(std::string& default_path, std::string& patch_pat
     if (g_bundle_id != NULL){delete[] g_bundle_id;}
     g_bundle_id = dupstr(bundle_id.c_str());
 	patch_path = il2cpp_path;
-	return true;
+	return g_has_il2cpp_patch || g_has_assets_patch;
 }
 
 static void* get_module_base( const char* module_name )
@@ -627,7 +661,6 @@ static int my_fclose(FILE* stream)
 typedef void *(*DlopenType)(const char *filename, int flags);
 static void *my_dlopen(const char *filename, int flags)
 {
-	
 	int il2cpp_postfix_len = strlen("libil2cpp.so");
 	int len = strlen(filename);
 	if (len > il2cpp_postfix_len && memcmp(filename + len - il2cpp_postfix_len, "libil2cpp.so", il2cpp_postfix_len) == 0)
@@ -826,25 +859,32 @@ static int init_hook()
 
 	//xhook_enable_debug(1);
 
-	HOOK("libunity.so", fopen);
-	HOOK("libunity.so", fseek);
-	HOOK("libunity.so", ftell);
-	HOOK("libunity.so", fread);
-	HOOK("libunity.so", fgets);
-	HOOK("libunity.so", fclose);
-	HOOK("libunity.so", stat);
-	HOOK("libunity.so", dlopen);
-	HOOK("libunity.so", open);
-	HOOK("libunity.so", read);
-	HOOK("libunity.so", lseek);
-	HOOK("libunity.so", lseek64);
-	HOOK("libunity.so", close);
+    if (g_has_assets_patch)
+    {
+        HOOK("libunity.so", fopen);
+        HOOK("libunity.so", fseek);
+        HOOK("libunity.so", ftell);
+        HOOK("libunity.so", fread);
+        HOOK("libunity.so", fgets);
+        HOOK("libunity.so", fclose);
+        HOOK("libunity.so", stat);
+        HOOK("libunity.so", open);
+        HOOK("libunity.so", read);
+        HOOK("libunity.so", lseek);
+        HOOK("libunity.so", lseek64);
+        HOOK("libunity.so", close);
+	}
+
+	if (g_has_il2cpp_patch)
+	{
+	    HOOK("libunity.so", dlopen);
+	}
 	
 	if(0 != xhook_refresh(1)){
 		MY_ERROR("failed to find replace function"); 
 		return -1; 
 	}	
-	
+
 	return 0;
 }
 
@@ -897,14 +937,14 @@ static void bootstrap()
 	
 	if (use_patch){
 		MY_INFO("bootstrap running %s with apk_path:[%s], patch_so:[%s], patch_dir:[%s]", TARGET_ARCH_ABI, 
-			g_apk_file_path, patch_il2cpp_path.c_str(), g_use_data_path);	
+			g_apk_file_path, patch_il2cpp_path.c_str(), g_use_data_path);
 
         delete_old_file_mapping_data();
 
 		bool success = (0 == init_hook());
 		if (success)
 		{
-			MY_INFO("bootstrap running with patch:%s", patch_il2cpp_path.c_str());
+	        MY_INFO("bootstrap running with patch: il2cpp_patch: [%s], assets_patch: [%s]", g_has_il2cpp_patch ? "true" : "false", g_has_assets_patch ? "true" : "false");
 
             // 在某些IO性能奇葩的机型上(Oppo A31)，需要等待一会，防止出现莫名其妙的IO问题
 			msleep(100);
