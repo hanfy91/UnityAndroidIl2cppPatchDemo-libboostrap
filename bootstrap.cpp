@@ -36,6 +36,11 @@ static bool g_has_assets_patch = false;
 static void bootstrap();
 std::string get_apk_path(const std::string& bundle_id);
 
+FDMAP g_fd_to_file;
+FSMAP g_fs_to_file;
+PthreadRwMutex g_fd_to_file_mutex;
+PthreadRwMutex g_fs_to_file_mutex;
+
 __attribute__ ((visibility ("default")))
 JNIEXPORT void JNICALL Java_io_github_noodle1983_Boostrap_init
   (JNIEnv * jenv, jclass cls, jstring path)
@@ -571,7 +576,7 @@ static FILE *my_fopen(const char *path, const char *mode)
 			return fopen(path, mode); 
 		}	
 		
-		FileExtraData* file_extra_data = save_file_mapping(shadow_zip);
+		FileExtraData* file_extra_data = save_file_mapping(shadow_zip, false);
 		MY_LOG("shadow apk in fopen: %s, fd:0x%08x, file*: 0x%08llx", path, file_extra_data->fd, (unsigned long long)file_extra_data->file);	
 		return file_extra_data->file;
 	}
@@ -649,7 +654,7 @@ static int my_fclose(FILE* stream)
 	FileExtraData* file_extra_data = get_file_mapping(stream);
 	if (file_extra_data != NULL)
 	{
-		clean_mapping_data(file_extra_data);
+		clean_mapping_data(file_extra_data, false);
 		return 0;
 	}
 	else
@@ -706,7 +711,7 @@ static int my_open(const char *path, int flags, ...)
 			return ret;
 		}	
 		
-		FileExtraData* file_extra_data = save_file_mapping(shadow_zip);
+		FileExtraData* file_extra_data = save_file_mapping(shadow_zip, true);
 		MY_LOG("shadow apk in open: %s, fd:0x%08x, file*: 0x%08llx", path, file_extra_data->fd, (unsigned long long)file_extra_data->file);	
 		return file_extra_data->fd;
 	}
@@ -775,7 +780,7 @@ static int my_close(int fd)
 	FileExtraData* file_extra_data = get_file_mapping(fd);
 	if (file_extra_data != NULL)
 	{
-		clean_mapping_data(file_extra_data);
+		clean_mapping_data(file_extra_data, true);
 		return 0;
 	}
 	else
