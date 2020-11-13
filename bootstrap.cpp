@@ -29,11 +29,11 @@ const char* SPLITER = ";";
 const char* g_data_file_path = NULL;
 const char* g_apk_file_path = NULL;
 const char* g_bundle_id = NULL;
-static void bootstrap();
+static bool bootstrap();
 std::string get_apk_path(const std::string& bundle_id);
 
 __attribute__ ((visibility ("default")))
-JNIEXPORT void JNICALL Java_io_github_noodle1983_Boostrap_init
+JNIEXPORT bool JNICALL Java_io_github_noodle1983_Boostrap_init
   (JNIEnv * jenv, jclass cls, jstring path)
 {
 	const char* data_file_path = jenv->GetStringUTFChars(path, NULL); 
@@ -41,7 +41,7 @@ JNIEXPORT void JNICALL Java_io_github_noodle1983_Boostrap_init
 	jenv->ReleaseStringUTFChars(path, data_file_path);
 	MY_INFO("data file path:%s", g_data_file_path);
 	
-	bootstrap();
+	return bootstrap();
 }
 
 __attribute__ ((visibility ("default")))
@@ -889,7 +889,7 @@ static void msleep(long msec)
     nanosleep(&ts, NULL);
 }
 
-static void bootstrap()
+static bool bootstrap()
 {
 	std::string default_il2cpp_path;
 	std::string patch_il2cpp_path;
@@ -915,11 +915,15 @@ static void bootstrap()
 		{		
 			MY_INFO("bootstrap running failed with patch");
 		}
+
+		return success;
 	}
 	else
 	{
 		MY_INFO("bootstrap running without patch");
 	}
+
+	return false;
 }
 
 //static void entrance() __attribute__((constructor));

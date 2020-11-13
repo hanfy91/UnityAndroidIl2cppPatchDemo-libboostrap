@@ -12,7 +12,7 @@ extern "C" {
  * Method:    init
  * Signature: (Ljava/lang/String;)V
  */
-JNIEXPORT void JNICALL Java_io_github_noodle1983_Boostrap_init
+JNIEXPORT bool JNICALL Java_io_github_noodle1983_Boostrap_init
   (JNIEnv *, jclass, jstring);
 
 JNIEXPORT void JNICALL Java_io_github_noodle1983_Boostrap_setpath
