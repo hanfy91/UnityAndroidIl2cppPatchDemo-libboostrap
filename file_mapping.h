@@ -11,6 +11,7 @@
 
 #include <vector>
 #include <string>
+#include <unordered_map>
 
 extern char* g_use_data_path;
 
@@ -23,6 +24,13 @@ struct FileExtraData
 	FILE* file;
 	int fd;
 };
+
+typedef std::unordered_map<int, FileExtraData*> FDMAP;
+typedef std::unordered_map<FILE*, FileExtraData*> FSMAP;
+extern FDMAP g_fd_to_file;
+extern FSMAP g_fs_to_file;
+extern PthreadMutex g_fd_to_file_mutex;
+extern PthreadMutex g_fs_to_file_mutex;
 
 // posix shm is not supported on Android.
 // we should use memfd, but it is not supported in older android(platform api < 26) 
@@ -81,7 +89,7 @@ static int delete_old_file_mapping_data()
 	return 0;
 }
 
-static FileExtraData* save_file_mapping(ShadowZip* shadow_zip)
+static FileExtraData* save_file_mapping(ShadowZip* shadow_zip, bool is_fd)
 {
 	FileExtraData* file_extra_data = new FileExtraData();	
 	file_extra_data->magic_num = MY_MAGIC_NUM;
@@ -100,14 +108,34 @@ static FileExtraData* save_file_mapping(ShadowZip* shadow_zip)
 	
 	fwrite((void*)file_extra_data, 1, sizeof(FileExtraData), file_extra_data->file);
 	fflush(file_extra_data->file);
-	fseek(file_extra_data->file, 0, SEEK_SET);	
-	
+	fseek(file_extra_data->file, 0, SEEK_SET);
+
+    if (is_fd)
+	{
+	    PthreadGuard guard(g_fd_to_file_mutex);
+	    g_fd_to_file[file_extra_data->fd] = file_extra_data;
+	}
+	else
+	{
+	    PthreadGuard guard(g_fs_to_file_mutex);
+	    g_fs_to_file[file_extra_data->file] = file_extra_data;
+	}
+
 	MY_METHOD("FileExtraData saved to %s. fd:0x%08x, file*: 0x%08llx", save_path, file_extra_data->fd, (unsigned long long)file_extra_data->file);
 	return file_extra_data;
 }
 
 static FileExtraData* get_file_mapping(int fd)
 {
+    FDMAP::iterator it = g_fd_to_file.find(fd);
+    if (it == g_fd_to_file.end())
+    {
+        return NULL;
+    }
+
+    return it->second != NULL ? it->second->self : NULL;
+
+    /*
 	off_t pos = lseek(fd, 0, SEEK_CUR);
 	if (pos != 0){return NULL;}
 	
@@ -121,11 +149,19 @@ static FileExtraData* get_file_mapping(int fd)
 	if (file_extra_data_copy.magic_num != MY_MAGIC_NUM) { return NULL; }
 	if (file_extra_data_copy.fd != fd) { return NULL; }
 	
-	return file_extra_data_copy.self;	
+	return file_extra_data_copy.self;	*/
 }
 
 static FileExtraData* get_file_mapping(FILE* file)
 {
+    FSMAP::iterator it = g_fs_to_file.find(file);
+    if (it == g_fs_to_file.end())
+    {
+        return NULL;
+    }
+
+    return it->second != NULL ? it->second->self : NULL;
+    /*
 	off_t pos = ftell(file);
 	if (pos != 0){return NULL;}
 	
@@ -139,10 +175,10 @@ static FileExtraData* get_file_mapping(FILE* file)
 	if (file_extra_data_copy.magic_num != MY_MAGIC_NUM) { return NULL; }
 	if (file_extra_data_copy.file != file) { return NULL; }
 	
-	return file_extra_data_copy.self;	
+	return file_extra_data_copy.self;	*/
 }
 
-static void clean_mapping_data(FileExtraData* file_extra_data)
+static void clean_mapping_data(FileExtraData* file_extra_data, bool is_fd)
 {
 	char save_path[512] = {0};
 	snprintf(save_path, sizeof(save_path), "%s/rt_fd_mappings/%08llx", g_use_data_path, (unsigned long long)file_extra_data->self);
@@ -151,7 +187,18 @@ static void clean_mapping_data(FileExtraData* file_extra_data)
 	fclose(file_extra_data->file);
 	delete file_extra_data->shadow_zip;
 	MY_METHOD("FileExtraData deleted %s. fd:0x%08x, file*: 0x%08llx", save_path, file_extra_data->fd, (unsigned long long)file_extra_data->file);
-	
+
+    if (is_fd)
+	{
+	    PthreadGuard guard(g_fd_to_file_mutex);
+	    g_fd_to_file[file_extra_data->fd] = NULL;
+	}
+	else
+	{
+	    PthreadGuard guard(g_fs_to_file_mutex);
+	    g_fs_to_file[file_extra_data->file] = NULL;
+	}
+
 	delete file_extra_data->self;
 }
 
