@@ -42,14 +42,19 @@ PthreadRwMutex g_fd_to_file_mutex;
 PthreadRwMutex g_fs_to_file_mutex;
 
 __attribute__ ((visibility ("default")))
-JNIEXPORT bool JNICALL Java_io_github_noodle1983_Boostrap_init
+JNIEXPORT void JNICALL Java_io_github_noodle1983_Boostrap_init
   (JNIEnv * jenv, jclass cls, jstring path)
 {
 	const char* data_file_path = jenv->GetStringUTFChars(path, NULL); 
 	g_data_file_path = dupstr(data_file_path); // never delete, ok with only one
 	jenv->ReleaseStringUTFChars(path, data_file_path);
 	MY_INFO("data file path:%s", g_data_file_path);
-	
+}
+
+__attribute__ ((visibility ("default")))
+JNIEXPORT bool JNICALL Java_io_github_noodle1983_Boostrap_boostrap
+  (JNIEnv * jenv, jclass cls)
+{
 	return bootstrap();
 }
 
