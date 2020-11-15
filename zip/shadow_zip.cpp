@@ -642,6 +642,7 @@ FILE* ShadowZip::prepare_file(int _file_index)
     }
 	MY_METHOD("prepare_file %s -> 0x%08zx", path.c_str(), (size_t)fp);
     fp_array_[_file_index] = fp;
+    setvbuf( fp , NULL , _IOFBF , 1024);
     return fp;
 }
 
