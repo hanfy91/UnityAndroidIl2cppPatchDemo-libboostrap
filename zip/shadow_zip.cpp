@@ -485,6 +485,7 @@ ShadowZip::ShadowZip()
 	patch_partitions_ = g_shadowzip_global_data->patch_partitions_;
     all_files_ = g_shadowzip_global_data->all_files_;
     end_of_file_ = g_shadowzip_global_data->end_of_file_;
+    partition_step = std::max(1, (int)ceil(sqrt(patch_partitions_.size())));
 }
 
 FILE* ShadowZip::fopen()
@@ -536,6 +537,24 @@ void ShadowZip::rewind(FILE *stream)
     pos_ = 0;
 }
 
+int ShadowZip::fast_find_partition(uint64_t begin)
+{
+    int count = patch_partitions_.size();
+    int step = partition_step;
+    int last_i = 0;
+    for (int i = 0; i < count; i += step)
+    {
+        const FilePartitionInfo& info = patch_partitions_[i];
+        if (begin >= info.shadow_stop_){
+            last_i = i;
+            continue;
+        }
+        break;
+    }
+
+    return last_i;
+}
+
 size_t ShadowZip::fread(void *ptr, size_t size, size_t nmemb, FILE *stream)
 {
 	PROFILER_TIMER("ShadowZip::fread");
@@ -546,9 +565,12 @@ size_t ShadowZip::fread(void *ptr, size_t size, size_t nmemb, FILE *stream)
     uint64_t begin = pos_;
     uint64_t end = pos_ + size * nmemb;
     size_t ret = 0;
-	
+
+	int start_i = fast_find_partition(begin);
+    int count = patch_partitions_.size();
+
     void* write_ptr = ptr;
-    for(int i = 0; i < patch_partitions_.size(); i++)
+    for(int i = start_i; i < count; i++)
     {
         FilePartitionInfo& info = patch_partitions_[i];
         if (begin >= info.shadow_stop_){
@@ -588,8 +610,11 @@ char* ShadowZip::fgets(char *s, int size, FILE *stream)
     uint64_t begin = pos_;
     uint64_t end = pos_ + size;
 
+	int start_i = fast_find_partition(begin);
+    int count = patch_partitions_.size();
+
     void* write_ptr = s;
-    for(int i = 0; i < patch_partitions_.size(); i++)
+    for(int i = start_i; i < count; i++)
     {
         FilePartitionInfo& info = patch_partitions_[i];
         if (begin >= info.shadow_stop_){

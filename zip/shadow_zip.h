@@ -62,6 +62,7 @@ public:
 
 	static bool contains_path(const char* _apk_file, const char* _check_path);
 
+    int fast_find_partition(uint64_t begin);
     FileExtraData* file_extra_data;
 
 private:
@@ -70,6 +71,7 @@ private:
 private:
     int64_t pos_;
     std::vector<FILE*> fp_array_;
+    int partition_step;
 	
 	//copy from global data
     std::vector<FilePartitionInfo> patch_partitions_;
