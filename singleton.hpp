@@ -3,13 +3,6 @@
 
 #include "pthread_mutex.hpp"
 
-
-class PthreadMutex;
-typedef PthreadMutex PthreadRwMutex;
-class PthreadGuard;
-typedef PthreadGuard PthreadReadGuard;
-typedef PthreadGuard PthreadWriteGuard;
-
 template<typename DataType, int instanceId = 0>
 class LeakSingleton 
 {

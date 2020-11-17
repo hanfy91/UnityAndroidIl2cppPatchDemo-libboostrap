@@ -22,7 +22,8 @@ LOCAL_SRC_FILES := \
 	bootstrap.cpp \
 	zip/shadow_zip.cpp \
 	zip/ZipEntry.cpp \
-	zip/ZipFile.cpp
+	zip/ZipFile.cpp \
+	profiler.cpp
 
 LOCAL_CFLAGS := -Izip -Imap -DTARGET_ARCH_ABI=\"$(TARGET_ARCH_ABI)\"  -fvisibility=hidden
 LOCAL_CPPFLAGS := -Izip -Imap -DTARGET_ARCH_ABI=\"$(TARGET_ARCH_ABI)\"  -std=c++11 -fvisibility=hidden

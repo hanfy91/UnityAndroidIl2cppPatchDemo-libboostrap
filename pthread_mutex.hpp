@@ -17,37 +17,48 @@
 #include <pthread.h>
 //#include "log.h"
 
-class PthreadMutex  
+class PthreadRwMutex
 {
 public:
-    PthreadMutex(){pthread_mutex_init(&mutexlock, 0);}
-    virtual ~PthreadMutex(){pthread_mutex_destroy(&mutexlock);}
+    PthreadRwMutex(){pthread_rwlock_init(&mutexlock, 0);}
+    virtual ~PthreadRwMutex(){pthread_rwlock_destroy(&mutexlock);}
 
-    void Lock(){
-		pthread_mutex_lock(&mutexlock);
+    void ReadLock(){
+		pthread_rwlock_rdlock(&mutexlock);
 		//MY_METHOD("lock at mutex: 0x%08llx", (unsigned long long)&mutexlock);
 	}
+    void WriteLock(){
+		pthread_rwlock_wrlock(&mutexlock);
+		//MY_METHOD("lock at mutex: 0x%08llx", (unsigned long long)&mutexlock);
+	}
+
     void Unlock(){	
 		//MY_METHOD("unlock at mutex: 0x%08llx", (unsigned long long)&mutexlock);
-		pthread_mutex_unlock(&mutexlock);
+		pthread_rwlock_unlock(&mutexlock);
 	}
 private:
-    pthread_mutex_t mutexlock;
+    pthread_rwlock_t mutexlock;
 };
 
-typedef PthreadMutex PthreadRwMutex;
-
-class PthreadGuard
+class PthreadReadGuard
 {
 public:
-	PthreadGuard(PthreadMutex& m){mutex = &m; mutex->Lock();}
-    virtual ~PthreadGuard(){mutex->Unlock();}
+	PthreadReadGuard(PthreadRwMutex& m){mutex = &m; mutex->ReadLock();}
+    virtual ~PthreadReadGuard(){mutex->Unlock();}
 	
 private:
-	PthreadMutex* mutex;
+	PthreadRwMutex* mutex;
 };
-typedef PthreadGuard PthreadReadGuard;
-typedef PthreadGuard PthreadWriteGuard;
+
+class PthreadWriteGuard
+{
+public:
+	PthreadWriteGuard(PthreadRwMutex& m){mutex = &m; mutex->WriteLock();}
+    virtual ~PthreadWriteGuard(){mutex->Unlock();}
+
+private:
+	PthreadRwMutex* mutex;
+};
 
 
 #endif /* PTHREADMUTEX_H */

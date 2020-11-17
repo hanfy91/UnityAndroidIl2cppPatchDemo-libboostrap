@@ -4,6 +4,7 @@
 #include <string.h>
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <sys/syscall.h>
 #include <fcntl.h>
 #include "log.h"
 #include "zip/shadow_zip.h"
@@ -12,7 +13,7 @@
 #include "mymap32.h"
 #include "file_mapping.h"
 #include "serial_utils.h"
-
+#include "profiler.h"
 
 static inline char * dupstr(const char* const str)
 {
@@ -141,6 +142,19 @@ static bool copy_file(const char* const from_path, const char* const to_path)
 	return true;
 }
 
+static void clear_file(const char* const file_path)
+{
+    int fd = ::open(file_path, O_RDWR);
+    if(fd < 0)
+    {
+        return;
+    }
+    else
+    {
+        ::ftruncate(fd, 0);
+        ::close(fd);
+    }
+}
 static bool prepare_so_lib(const char* const data_path, const std::string& bundle_id)
 {
 	DIR* dir = opendir(data_path);
@@ -170,13 +184,15 @@ static bool prepare_so_lib(const char* const data_path, const std::string& bundl
             snprintf(to_filepath, sizeof(to_filepath), "%s/%s", g_data_file_path, filename);
             copy_file(from_filepath, to_filepath);
 
-            // rename patch_dir/xxx.new -> data/files/xxx
-            // if rollback, rename back before prepare_so_lib
+            // rename patch_dir/xxx.new -> patch_dir/xxx
             char new_filepath[256] = {0};
             strncpy(new_filepath, from_filepath, sizeof(new_filepath));
             new_filepath[strlen(from_filepath) - new_file_postfix_len] = '\0';
 			unlink(new_filepath);
 			rename(from_filepath, new_filepath);
+
+			// clear the file content to save disk space. The real .so is already copied to data/files/, this one here is just for keeping a record,
+			clear_file(new_filepath);
 			continue;
 		}
     }
@@ -222,11 +238,13 @@ char* use_data_dir(const char* data_path, const char* useless)
 
     //3. pre-calc partition
     ShadowZipGlobalData global_data;
+    global_data.end_of_file_ = 0;
     if(0 != ShadowZip::init(data_path, apk_path_string.c_str(), &global_data)){
 		char error_str[256] = {0};
 		snprintf(error_str, sizeof(error_str), "failed to do ShadowZip::init(%s, %s)", data_path, apk_path_string.c_str());
-		MY_ERROR("%s", error_str);
-		return dupstr(error_str);
+		MY_INFO("%s", error_str);
+		// Can't find any patch files in assets/bin/Data, and will try to load il2cpp only, do not return.
+		//return dupstr(error_str);
     }
 
 	char patch_info_path[256] = {0};
@@ -250,6 +268,8 @@ char* use_data_dir(const char* data_path, const char* useless)
     ::fclose(fw);
 	unlink(formal_patch_info_path);
 	rename(patch_info_path, formal_patch_info_path);
+
+	MY_INFO("use_data_dir finished! apk_path_string=%s", apk_path_string.c_str());
 	return NULL;
 }
 
@@ -315,6 +335,23 @@ bool has_any_assets_patch(const char* _patch_dir)
     return has_any;
 }
 
+bool has_any_il2cpp_patch(const char* _patch_dir)
+{
+	char il2cpp_path[256] = {0};
+	snprintf(il2cpp_path, sizeof(il2cpp_path), "%s/libil2cpp.so", _patch_dir);
+	FILE *fi = fopen (il2cpp_path, "r");
+	if (fi == NULL)
+	{
+		MY_INFO("libil2cpp.so can't find:%d[%s]", errno, il2cpp_path);
+	    return false;
+	}
+	else
+	{
+	    fclose (fi);
+	    return true;
+	}
+}
+
 static dev_t g_apk_device_id = -1;
 static ino_t g_apk_ino = -1;
 static bool extract_patch_info(std::string& default_path, std::string& patch_path)
@@ -362,7 +399,7 @@ static bool extract_patch_info(std::string& default_path, std::string& patch_pat
     g_shadowzip_global_data->end_of_file_ = unserial_uint64(fp);
     ::fclose(fp);
 	ShadowZip::log(g_shadowzip_global_data);
-	
+
 	const char* data_path = data_path_string.c_str();
 	DIR* dir = opendir(data_path);
 	if (dir == NULL)
@@ -395,7 +432,10 @@ static bool extract_patch_info(std::string& default_path, std::string& patch_pat
 		MY_ERROR("can't pre_process_all_so_lib");
 		return false;
 	}
-	
+
+    // There're two .so files, one at internal storage, the other at patch directory.
+    // .so must be at internal storage path to be loaded.
+    // We check both of them!
 	char link_file[256] = {0};
 	snprintf(link_file, sizeof(link_file), "%s/libil2cpp.so", g_data_file_path);
 	std::string il2cpp_path(link_file);	
@@ -407,8 +447,9 @@ static bool extract_patch_info(std::string& default_path, std::string& patch_pat
 	}
 	else
 	{
-		g_has_il2cpp_patch = true;
 	    fclose (fi);
+	    // also check if there's is a libil2cpp.so file at patch dir
+		g_has_il2cpp_patch = has_any_il2cpp_patch(data_path);
 	}
 
 	g_has_assets_patch = has_any_assets_patch(data_path);
@@ -560,8 +601,10 @@ static ShadowZip* get_cached_shadowzip(int fd)
 
 typedef FILE *(* FOpenType)(const char *path, const char *mode);
 static FILE *my_fopen(const char *path, const char *mode)
-{	
+{
 	MY_METHOD("fopen([%s],[%s])", path, mode);
+
+	PROFILER_TIMER("my_fopen");
 	
 	struct stat file_stat;
 	memset(&file_stat, 0, sizeof(struct stat));
@@ -573,7 +616,20 @@ static FILE *my_fopen(const char *path, const char *mode)
 	
 	if (g_apk_device_id == file_stat.st_dev && g_apk_ino == file_stat.st_ino)
 	{
-		ShadowZip* shadow_zip = new ShadowZip();
+	    //Try acquire from cache
+	    ShadowZip* shadow_zip = NULL;
+	    {
+	        PthreadWriteGuard guard(g_shadow_zip_cache_mutex);
+	        if (g_shadow_zip_cache.size() > 0)
+	        {
+		        shadow_zip = g_shadow_zip_cache.back();
+		        shadow_zip->rewind(NULL);
+		        g_shadow_zip_cache.pop_back();
+		        return shadow_zip->file_extra_data->file;
+		    }
+	    }
+	    // Fail to acquire from cache, new one
+	    shadow_zip = new ShadowZip();
 		FILE* fp = shadow_zip->fopen();
 		if (fp == NULL){	
 			MY_ERROR("something bad happens!");
@@ -594,6 +650,7 @@ static FILE *my_fopen(const char *path, const char *mode)
 typedef int (*FseekType)(FILE *stream, long offset, int whence);
 static int my_fseek(FILE *stream, long offset, int whence)
 {
+	PROFILER_TIMER("my_fseek");
 	
 	ShadowZip* shadow_zip = get_cached_shadowzip(stream);
 	if (shadow_zip == NULL){
@@ -630,7 +687,8 @@ static void myrewind(FILE *stream)
 typedef size_t (*FreadType)(void *ptr, size_t size, size_t nmemb, FILE *stream);
 static size_t my_fread(void *ptr, size_t size, size_t nmemb, FILE *stream)
 {
-	
+	PROFILER_TIMER("my_fread");
+
 	ShadowZip* shadow_zip = get_cached_shadowzip(stream);
 	if (shadow_zip == NULL){
 		return fread(ptr, size, nmemb, stream);
@@ -642,6 +700,7 @@ static size_t my_fread(void *ptr, size_t size, size_t nmemb, FILE *stream)
 typedef char * (*Fgets)(char *s, int size, FILE *stream);
 static char * my_fgets(char *s, int size, FILE *stream)
 {
+	PROFILER_TIMER("my_fgets");
 	
 	ShadowZip* shadow_zip = get_cached_shadowzip(stream);
 	if (shadow_zip == NULL){
@@ -659,7 +718,7 @@ static int my_fclose(FILE* stream)
 	FileExtraData* file_extra_data = get_file_mapping(stream);
 	if (file_extra_data != NULL)
 	{
-		clean_mapping_data(file_extra_data, false);
+		release_to_cache(file_extra_data, false);
 		return 0;
 	}
 	else
@@ -685,7 +744,9 @@ static void *my_dlopen(const char *filename, int flags)
 
 typedef int (*OpenType)(const char *path, int flags, ...);
 static int my_open(const char *path, int flags, ...)
-{		
+{
+	PROFILER_TIMER("my_open");
+
 	mode_t mode = -1;
 	int has_mode = ((flags & O_CREAT) == O_CREAT) || ((flags & 020000000) == 020000000);
 	if (has_mode)
@@ -706,7 +767,20 @@ static int my_open(const char *path, int flags, ...)
 	
 	if (g_apk_device_id == file_stat.st_dev && g_apk_ino == file_stat.st_ino)
 	{
-		ShadowZip* shadow_zip = new ShadowZip();
+	    //Try acquire from cache
+	    ShadowZip* shadow_zip = NULL;
+	    {
+	        PthreadWriteGuard guard(g_shadow_zip_cache_mutex);
+	        if (g_shadow_zip_cache.size() > 0)
+	        {
+		        shadow_zip = g_shadow_zip_cache.back();
+		        shadow_zip->rewind(NULL);
+		        g_shadow_zip_cache.pop_back();
+		        return shadow_zip->file_extra_data->fd;
+		    }
+	    }
+	    // Fail to acquire from cache, new one
+		shadow_zip = new ShadowZip();
 		FILE* fp = shadow_zip->fopen();
 		if (fp == NULL){	
 			MY_ERROR("something bad happens!");
@@ -729,6 +803,7 @@ static int my_open(const char *path, int flags, ...)
 typedef ssize_t(*ReadType)(int fd, void *buf, size_t nbyte);
 static ssize_t my_read(int fd, void *buf, size_t nbyte)
 {
+	PROFILER_TIMER("my_read");
 	MY_METHOD("read: 0x%08x, %zu", fd, nbyte);
 	
 	
@@ -785,7 +860,7 @@ static int my_close(int fd)
 	FileExtraData* file_extra_data = get_file_mapping(fd);
 	if (file_extra_data != NULL)
 	{
-		clean_mapping_data(file_extra_data, true);
+		release_to_cache(file_extra_data, true);
 		return 0;
 	}
 	else
@@ -959,11 +1034,14 @@ static bool bootstrap()
             // 在某些IO性能奇葩的机型上(Oppo A31)，需要等待一会，防止出现莫名其妙的IO问题
 			msleep(100);
 
+#ifdef PROFILER_ENABLE
+			create_monitor_thread();
+#endif
 			//ShadowZip::output_apk(g_use_data_path);
 			return true;
 		}// else we still do so hook
 		else
-		{		
+		{
 			MY_INFO("bootstrap running failed with patch");
 		}
 	}

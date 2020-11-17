@@ -54,6 +54,9 @@ void serial_partition_vector(FILE* fp, const std::vector<FilePartitionInfo>& v)
     uint32_t len = (uint32_t)v.size();
     serial_uint32(fp, len);
 
+    if (len == 0)
+        return;
+
     int write_cnt = fwrite(v.data(), 1, sizeof(FilePartitionInfo) * len, fp);
     if (write_cnt != len*sizeof(FilePartitionInfo))
     {
@@ -116,6 +119,10 @@ void unserial_partition_vector(FILE* fp, std::vector<FilePartitionInfo>& v)
 {
     v.clear();
     uint32_t len = unserial_uint32(fp);
+
+    if (len == 0)
+        return;
+
     v.reserve(len);
 
     FilePartitionInfo* f = (FilePartitionInfo*)new char[len * sizeof(FilePartitionInfo)];

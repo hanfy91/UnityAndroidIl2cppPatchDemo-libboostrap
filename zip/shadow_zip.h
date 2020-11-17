@@ -6,6 +6,7 @@
 #include <string>
 #include <stdint.h>
 #include <stdio.h>
+#include <list>
 #include "singleton.hpp"
 
 struct FilePartitionInfo
@@ -32,6 +33,12 @@ struct ShadowZipGlobalData
 };
 #define g_shadowzip_global_data (LeakSingleton<ShadowZipGlobalData, 0>::instance())
 
+class ShadowZip;
+class FileExtraData;
+
+extern std::list<ShadowZip*> g_shadow_zip_cache;
+extern PthreadRwMutex g_shadow_zip_cache_mutex;
+
 class ShadowZip
 {
 public:
@@ -54,12 +61,15 @@ public:
 	static void output_apk(const char* _patch_dir);
 
 	static bool contains_path(const char* _apk_file, const char* _check_path);
+
+    FileExtraData* file_extra_data;
+
 private:
     FILE* prepare_file(int _file_index);
 
 private:
     int64_t pos_;
-    std::vector<FILE *> fp_array_;
+    std::vector<FILE*> fp_array_;
 	
 	//copy from global data
     std::vector<FilePartitionInfo> patch_partitions_;

@@ -3,3 +3,4 @@ libs
 gdb*
 *.txt
 *.bak
+.idea/

@@ -6,8 +6,14 @@
 #include <dirent.h>
 #include <assert.h>
 #include <string.h>
+#include <unistd.h>
+#include "profiler.h"
 
 using namespace android;
+
+std::list<ShadowZip*> g_shadow_zip_cache;
+PthreadRwMutex g_shadow_zip_cache_mutex;
+int g_current_shadow_zip_count;
 
 class FileHandleReleaser
 {
@@ -441,7 +447,6 @@ void ShadowZip::log(ShadowZipGlobalData* global_data)
 
 uint64_t ShadowZip::get_eof_pos()
 {
-	PthreadWriteGuard(g_shadowzip_global_data->mutex);
 	MY_METHOD("get_eof_pos -> 0x%08llx", (unsigned long long)g_shadowzip_global_data->end_of_file_);
 	return g_shadowzip_global_data->end_of_file_;
 }
@@ -484,6 +489,8 @@ ShadowZip::ShadowZip()
 
 FILE* ShadowZip::fopen()
 {
+	PROFILER_TIMER("ShadowZip::fopen");
+
     pos_ = 0;
 	fp_array_.clear();
 	for(int i = 0; i < all_files_.size(); i++)
@@ -496,7 +503,9 @@ FILE* ShadowZip::fopen()
 }
 
 off64_t ShadowZip::fseek(FILE *stream, off64_t offset, int whence)
-{	
+{
+	PROFILER_TIMER("ShadowZip::fseek");
+
 	MY_METHOD("fseek -> 0x%08zx at 0x%08llx with type %d", (size_t)stream, (unsigned long long)offset, whence);
     int64_t cur_pos = pos_;
     if (whence == SEEK_SET){
@@ -529,6 +538,8 @@ void ShadowZip::rewind(FILE *stream)
 
 size_t ShadowZip::fread(void *ptr, size_t size, size_t nmemb, FILE *stream)
 {
+	PROFILER_TIMER("ShadowZip::fread");
+
 	MY_METHOD("fread -> 0x%08zx at 0x%08llx, size:%zu, n:%zu", (size_t)stream, (unsigned long long)pos_, size, nmemb);
 	if (((int)nmemb) <= 0){return 0;}
 	
@@ -554,8 +565,11 @@ size_t ShadowZip::fread(void *ptr, size_t size, size_t nmemb, FILE *stream)
         }
         FILE* fp = prepare_file(info.file_index_);
         assert(fp != NULL);
-        ::fseek(fp, start_in_file, SEEK_SET);
-        ::fread(write_ptr, 1, read_size, fp); 
+        {
+	        PROFILER_TIMER("ShadowZip::fseek & fread");
+            ::fseek(fp, start_in_file, SEEK_SET);
+            ::fread(write_ptr, 1, read_size, fp);
+        }
         ret += read_size;
         pos_ += read_size;
         write_ptr = (char*)write_ptr + read_size;
@@ -568,6 +582,8 @@ size_t ShadowZip::fread(void *ptr, size_t size, size_t nmemb, FILE *stream)
 
 char* ShadowZip::fgets(char *s, int size, FILE *stream)
 {
+	PROFILER_TIMER("ShadowZip::fgets");
+
 	MY_METHOD("fgets -> 0x%08zx at 0x%08llx, size:%d", (size_t)stream, (unsigned long long)pos_, size);
     uint64_t begin = pos_;
     uint64_t end = pos_ + size;
@@ -611,6 +627,7 @@ int ShadowZip::fclose(FILE* stream)
 		if (fp) {		
 			MY_METHOD("fclose -> 0x%08zx fp%d at 0x%08lx", (size_t)stream, i, ::ftell(fp));
 			::fclose(fp);
+			--g_total_file_handlers;
 		}
     }
     fp_array_.clear();
@@ -622,17 +639,6 @@ FILE* ShadowZip::prepare_file(int _file_index)
     if (fp_array_[_file_index] != NULL ){
         return fp_array_[_file_index];
     }
-	
-	//incace of too many file opened, close all except base.apk
-	for(int i = 1; i < fp_array_.size(); i++) 
-    {
-		FILE* fp = fp_array_[i];
-		if (fp) {		
-			MY_METHOD("fclose -> 0x%08zx fp:%d at 0x%08lx", (size_t)fp, i, ::ftell(fp));
-			::fclose(fp);
-			fp_array_[i] = NULL;
-		}
-    }
 
     std::string& path = all_files_[_file_index];
     FILE* fp = ::fopen(path.c_str(), "rb");
@@ -643,7 +649,7 @@ FILE* ShadowZip::prepare_file(int _file_index)
 	MY_METHOD("prepare_file %s -> 0x%08zx", path.c_str(), (size_t)fp);
     fp_array_[_file_index] = fp;
     setvbuf( fp , NULL , _IOFBF , 1024);
+    ++g_total_file_handlers;
     return fp;
 }
-
 
