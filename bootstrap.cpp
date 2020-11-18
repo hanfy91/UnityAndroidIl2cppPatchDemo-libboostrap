@@ -563,6 +563,8 @@ std::string get_apk_path(const std::string& bundle_id)
 		}
 		fclose( fp ) ;
 	}
+
+	MY_INFO("get_apk_path:%s", ret.c_str());
 	return ret;
 }
 
@@ -605,7 +607,7 @@ static FILE *my_fopen(const char *path, const char *mode)
 	MY_METHOD("fopen([%s],[%s])", path, mode);
 
 	PROFILER_TIMER("my_fopen");
-	
+
 	struct stat file_stat;
 	memset(&file_stat, 0, sizeof(struct stat));
 	if (stat(path, &file_stat) != 0) {
@@ -613,7 +615,7 @@ static FILE *my_fopen(const char *path, const char *mode)
 		MY_METHOD("not exist([%s],[%s])", path, mode);
 		return fopen(path, mode);
 	}
-	
+
 	if (g_apk_device_id == file_stat.st_dev && g_apk_ino == file_stat.st_ino)
 	{
 	    //Try acquire from cache
@@ -764,7 +766,7 @@ static int my_open(const char *path, int flags, ...)
 		MY_METHOD("open(can't access): %s -> fd:0x%08x", path, ret);
 		return ret;
 	}
-	
+
 	if (g_apk_device_id == file_stat.st_dev && g_apk_ino == file_stat.st_ino)
 	{
 	    //Try acquire from cache
