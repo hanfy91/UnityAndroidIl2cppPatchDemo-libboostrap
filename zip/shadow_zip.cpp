@@ -305,7 +305,6 @@ void ShadowZip::output_apk(const char* _patch_dir)
 
 int ShadowZip::init(const char* _patch_dir, const char* _sys_apk_file, ShadowZipGlobalData* global_data)
 {
-	PthreadWriteGuard(global_data->mutex);
     global_data->patch_partitions_.clear();
     global_data->all_files_.clear();
     global_data->all_files_.push_back(_sys_apk_file);
@@ -481,7 +480,6 @@ bool ShadowZip::contains_path(const char* _apk_file, const char* _check_path)
 
 ShadowZip::ShadowZip()
 {
-	PthreadWriteGuard(g_shadowzip_global_data->mutex);
 	patch_partitions_ = g_shadowzip_global_data->patch_partitions_;
     all_files_ = g_shadowzip_global_data->all_files_;
     end_of_file_ = g_shadowzip_global_data->end_of_file_;

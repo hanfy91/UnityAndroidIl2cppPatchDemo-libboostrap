@@ -1,8 +1,6 @@
 #ifndef SINGLETON_HPP
 #define SINGLETON_HPP
 
-#include "pthread_mutex.hpp"
-
 template<typename DataType, int instanceId = 0>
 class LeakSingleton 
 {
@@ -25,41 +23,6 @@ private:
 
 template<typename DataType, int instanceId>
 DataType* LeakSingleton<DataType, instanceId>::dataM = NULL;
-
-//--------------------------------------------------------------
-
-#include <memory>
-template<typename DataType, int instanceId = 0>
-class Singleton
-{
-public:
-	static DataType* instance()
-	{
-		if (NULL == dataHolderM.get())
-		{
-			PthreadWriteGuard lock(dbLockMutexM);
-			if (NULL == dataHolderM.get())
-			{
-				dataHolderM.reset(new DataType);
-			}
-		}
-		return dataHolderM.get();
-
-	}
-private:
-	Singleton(){};
-	~Singleton(){};
-
-	static std::shared_ptr<DataType> dataHolderM;
-	static PthreadRwMutex dbLockMutexM;
-};
-
-template<typename DataType, int instanceId>
-std::shared_ptr<DataType> Singleton<DataType, instanceId>::dataHolderM;
-
-template<typename DataType, int instanceId>
-PthreadRwMutex Singleton<DataType, instanceId>::dbLockMutexM;
-
 
 #endif /* SINGLETON_HPP */
 

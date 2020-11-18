@@ -8,6 +8,7 @@
 #include <stdio.h>
 #include <list>
 #include "singleton.hpp"
+#include "pthread_mutex.hpp"
 
 struct FilePartitionInfo
 {
@@ -26,7 +27,6 @@ struct FilePartitionInfo
 
 struct ShadowZipGlobalData
 {
-	PthreadRwMutex mutex;
     std::vector<FilePartitionInfo> patch_partitions_;
     std::vector<std::string> all_files_;
     uint64_t end_of_file_;

@@ -1007,15 +1007,6 @@ static int init_art_hook()
 	return 0;
 }
 
-/* msleep(): Sleep for the requested number of milliseconds. */
-static void msleep(long msec)
-{
-    struct timespec ts;
-    ts.tv_sec = msec / 1000;
-    ts.tv_nsec = (msec % 1000) * 1000000;
-    nanosleep(&ts, NULL);
-}
-
 static bool bootstrap()
 {
 	std::string default_il2cpp_path;

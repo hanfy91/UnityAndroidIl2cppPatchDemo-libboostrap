@@ -15,29 +15,30 @@
 
 
 #include <pthread.h>
+#include "pthread_spin_lock.h"
 //#include "log.h"
 
 class PthreadRwMutex
 {
 public:
-    PthreadRwMutex(){pthread_rwlock_init(&mutexlock, 0);}
-    virtual ~PthreadRwMutex(){pthread_rwlock_destroy(&mutexlock);}
+    PthreadRwMutex(){pthread_spin_init(&mutexlock, 0);}
+    virtual ~PthreadRwMutex(){pthread_spin_destroy(&mutexlock);}
 
     void ReadLock(){
-		pthread_rwlock_rdlock(&mutexlock);
+		pthread_spin_lock(&mutexlock);
 		//MY_METHOD("lock at mutex: 0x%08llx", (unsigned long long)&mutexlock);
 	}
     void WriteLock(){
-		pthread_rwlock_wrlock(&mutexlock);
+		pthread_spin_lock(&mutexlock);
 		//MY_METHOD("lock at mutex: 0x%08llx", (unsigned long long)&mutexlock);
 	}
 
     void Unlock(){	
 		//MY_METHOD("unlock at mutex: 0x%08llx", (unsigned long long)&mutexlock);
-		pthread_rwlock_unlock(&mutexlock);
+		pthread_spin_unlock(&mutexlock);
 	}
 private:
-    pthread_rwlock_t mutexlock;
+    pthread_spinlock_t mutexlock;
 };
 
 class PthreadReadGuard

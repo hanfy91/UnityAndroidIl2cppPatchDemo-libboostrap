@@ -65,5 +65,6 @@ private:
 };
 
 void create_monitor_thread();
+void msleep(long msec);
 
 #endif //UNITYANDROIDIL2CPPPATCHDEMO_LIBBOOSTRAP_PROFILER_H

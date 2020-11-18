@@ -40,3 +40,11 @@ void create_monitor_thread()
     pthread_create(&threadid, NULL, &profiler_thread_proc, NULL);
     MY_INFO("create_monitor_thread");
 }
+
+void msleep(long msec)
+{
+    struct timespec ts;
+    ts.tv_sec = msec / 1000;
+    ts.tv_nsec = (msec % 1000) * 1000000;
+    nanosleep(&ts, NULL);
+}

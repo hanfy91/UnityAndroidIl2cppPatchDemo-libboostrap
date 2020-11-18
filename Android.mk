@@ -47,7 +47,8 @@ LOCAL_MODULE_FILENAME := test_pthread_mutex
 
 cmd-strip = $(TOOLCHAIN_PREFIX)strip --strip-unneeded -x $1
 
-LOCAL_SRC_FILES := unittest/test_mutex.cpp
+LOCAL_SRC_FILES := unittest/test_mutex.cpp \
+	profiler.cpp
 
 LOCAL_CFLAGS :=  -g -O0 -fvisibility=hidden -pie -fPIE
 LOCAL_CPPFLAGS := -g -O0 -std=c++11 -fvisibility=hidden -pie -fPIE
