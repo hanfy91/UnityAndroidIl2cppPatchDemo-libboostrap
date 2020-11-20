@@ -22,7 +22,7 @@ void dump_profiler()
         int totalMilliSec = (int)(data->totalNanoSec / 1000000);
         MY_INFO("Profiler [%s] count:[%d], total_time:[%d ms]", name, data->count, totalMilliSec);
     }
-    MY_INFO("Profiler total files open:[%d], total ShadowZip cache count:[%d]", g_total_file_handlers, g_shadow_zip_cache.size());
+    MY_INFO("Profiler total files open:[%d], total ShadowZip cache count:[%d]", g_total_file_handlers, (int)g_shadow_zip_cache.size());
  }
 
 void *profiler_thread_proc(void *arg)

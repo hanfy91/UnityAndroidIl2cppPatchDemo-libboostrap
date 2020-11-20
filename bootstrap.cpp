@@ -151,6 +151,9 @@ static void clear_file(const char* const file_path)
     }
     else
     {
+        int size = (int)lseek(fd, 0, SEEK_END);
+		MY_INFO("clearing file:[%s], size:[%d]", file_path, size);
+
         ::ftruncate(fd, 0);
         ::close(fd);
     }
@@ -447,7 +450,11 @@ static bool extract_patch_info(std::string& default_path, std::string& patch_pat
 	}
 	else
 	{
+	    fseek(fi, 0, SEEK_END);
+	    int so_size = ftell(fi);
+		MY_INFO("find libil2cpp.so:[%s], size:[%d]", il2cpp_path.c_str(), so_size);
 	    fclose (fi);
+
 	    // also check if there's is a libil2cpp.so file at patch dir
 		g_has_il2cpp_patch = has_any_il2cpp_patch(data_path);
 	}
