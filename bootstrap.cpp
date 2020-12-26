@@ -556,25 +556,22 @@ std::string get_apk_path(const std::string& bundle_id)
 	
 	fp = fopen( "/proc/self/maps", "r" );
 	if ( fp != NULL ){
-		int min_len = -1;
+		int min_len = INT_MAX;
 		while ( fgets( line, sizeof(line), fp ) ){	
 			int line_len = strlen(line);
 			while(line[line_len - 1] == ' ' || line[line_len - 1] == '\r' || line[line_len - 1] == '\n' || line[line_len - 1] == '\t') {line[line_len - 1] = '\0'; line_len--;}
-			if ( strstr( line, bundle_id.c_str()) && (memcmp(line + strlen(line) - TAIL_LEN, TAIL, TAIL_LEN) == 0))
-			{
-				if(min_len == -1 || min_len > line_len)
+			if ( strstr( line, bundle_id.c_str()) && (memcmp(line + strlen(line) - TAIL_LEN, TAIL, TAIL_LEN) == 0) ){
+				found_path = strchr( line, '/' );
+				if (ShadowZip::contains_path(found_path, "assets/bin/Data/"))
 				{
-					found_path = strchr( line, '/' );
-					min_len = line_len;
+					if(min_len > line_len)
+					{
+						ret = std::string(found_path);
+						min_len = line_len;
+					}
 				}
 			}
 		}
-
-		if (min_len != -1 && ShadowZip::contains_path(found_path, "assets/bin/Data/"))
-		{
-			ret = std::string(found_path);
-		}
-
 		fclose( fp ) ;
 	}
 
